@@ -1,11 +1,13 @@
+{{ config(partition_by={"field": "run_date", "data_type": "date"}) }}
+
 with latest as (
     select
         current_date() as run_date,
-        (select count(*) from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.bigbasket_prices`
+        (select count(*) from {{ source('raw_ecommerce', 'bigbasket_prices') }}
           where scraped_date >= date_trunc(current_date(), week(monday))) as bigbasket_rows_loaded,
-        (select count(*) from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.mandi_prices`
+        (select count(*) from {{ source('raw_ecommerce', 'mandi_prices') }}
           where arrival_date >= date_trunc(current_date(), week(monday))) as mandi_rows_loaded,
-        (select max(scraped_at) from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.bigbasket_prices`) as last_successful_run
+        (select max(scraped_at) from {{ source('raw_ecommerce', 'bigbasket_prices') }}) as last_successful_run
 ),
 commodities as (
     select distinct canonical_commodity_name

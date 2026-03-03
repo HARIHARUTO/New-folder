@@ -1,22 +1,18 @@
 ﻿import os
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
+from typing import Dict, List
 
 import pandas as pd
 from dotenv import load_dotenv
 
-from bq_loader import load_dataframe
+from ingestion.bq_loader import load_dataframe
 
 
-def main() -> None:
-    load_dotenv()
-    project = os.getenv("GCP_PROJECT_ID")
-    dataset = os.getenv("BQ_DATASET_RAW", "raw_ecommerce")
-    table_id = f"{project}.{dataset}.bigbasket_prices"
-
+def get_mock_rows() -> List[Dict[str, object]]:
     now = datetime.now(timezone.utc)
     today = date.today()
 
-    rows = [
+    return [
         {
             "product_name": "Tomato",
             "category": "fruits-vegetables",
@@ -52,9 +48,17 @@ def main() -> None:
         },
     ]
 
+
+def load_mock_rows() -> int:
+    load_dotenv()
+    project = os.getenv("GCP_PROJECT_ID")
+    dataset = os.getenv("BQ_DATASET_RAW", "raw_ecommerce")
+    table_id = f"{project}.{dataset}.bigbasket_prices"
+
+    rows = get_mock_rows()
     df = pd.DataFrame(rows)
-    load_dataframe(df, table_id)
+    return load_dataframe(df, table_id)
 
 
 if __name__ == "__main__":
-    main()
+    load_mock_rows()

@@ -1,3 +1,5 @@
+{{ config(partition_by={"field": "week", "data_type": "date"}, cluster_by=["canonical_commodity"]) }}
+
 select
     week,
     canonical_commodity_name as canonical_commodity,

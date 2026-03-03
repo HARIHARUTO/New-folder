@@ -1,3 +1,5 @@
+{{ config(partition_by={"field": "week", "data_type": "date"}) }}
+
 with base as (
     select * from {{ ref('int_retail_vs_wholesale') }}
 ),
@@ -24,14 +26,14 @@ raw_counts as (
     select
         date_trunc(scraped_date, week(monday)) as week,
         count(*) as total_retail_rows
-    from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.bigbasket_prices`
+    from {{ source('raw_ecommerce', 'bigbasket_prices') }}
     group by 1
 ),
 mandi_counts as (
     select
         date_trunc(arrival_date, week(monday)) as week,
         count(*) as total_mandi_rows
-    from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.mandi_prices`
+    from {{ source('raw_ecommerce', 'mandi_prices') }}
     group by 1
 )
 select

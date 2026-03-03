@@ -9,7 +9,7 @@ with raw as (
         modal_price_per_kg,
         fetched_at,
         date_trunc(arrival_date, week(monday)) as price_week
-    from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.mandi_prices`
+    from {{ source('raw_ecommerce', 'mandi_prices') }}
     where modal_price_per_kg is not null and modal_price_per_kg > 0
 ),
 ranked as (

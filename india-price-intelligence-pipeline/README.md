@@ -18,6 +18,22 @@ A weekly automated data pipeline that:
 BigBasket Scraper + data.gov.in API -> BigQuery raw dataset -> dbt staging/intermediate/marts -> Looker Studio
 Orchestration: Airflow DAG (weekly, Sunday 06:00)
 
+## Current Progress (as of 2026-03-03)
+
+Completed:
+- Ingestion scripts for Mandi API and retail scraper.
+- BigQuery raw tables and dbt models (staging, intermediate, marts).
+- dbt tests + custom data quality checks.
+- Airflow DAG orchestration with retries and source freshness check.
+- Docker Compose setup for Airflow + Postgres.
+- Looker Studio dashboard connected to marts.
+- Source freshness rules + partitioned marts for performance.
+
+In progress:
+- Real-time retail scraping stability (site availability/anti-bot).
+- Email alerting (SMTP config via Airflow).
+- Consistent manual trigger + log visibility on Airflow UI.
+
 ## Tech Stack
 
 - Python 3.11

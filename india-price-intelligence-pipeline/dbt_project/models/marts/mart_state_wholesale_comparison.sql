@@ -1,3 +1,5 @@
+{{ config(partition_by={"field": "price_week", "data_type": "date"}, cluster_by=["state", "canonical_commodity"]) }}
+
 with reconciled as (
     select * from {{ ref('int_commodity_reconciled') }} where source = 'mandi'
 )

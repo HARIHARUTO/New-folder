@@ -5,10 +5,15 @@ from typing import Iterable
 import pandas as pd
 from google.api_core.exceptions import Forbidden, NotFound
 from google.cloud import bigquery
+from google.oauth2 import service_account
 
 
 def get_bq_client() -> bigquery.Client:
     project_id = os.getenv("GCP_PROJECT_ID")
+    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if cred_path and os.path.exists(cred_path):
+        credentials = service_account.Credentials.from_service_account_file(cred_path)
+        return bigquery.Client(project=project_id, credentials=credentials)
     return bigquery.Client(project=project_id)
 
 

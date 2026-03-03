@@ -1,0 +1,17 @@
+﻿version: 2
+
+sources:
+  - name: raw_ecommerce
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('BQ_DATASET_RAW') }}"
+    tables:
+      - name: bigbasket_prices
+        loaded_at_field: scraped_at
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}
+      - name: mandi_prices
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 2, period: day}
+          error_after: {count: 7, period: day}

@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 
 from ingestion.bq_loader import ensure_columns, load_dataframe
+from ingestion.mock_bigbasket import load_mock_rows
 from ingestion.utils import clean_price_to_float, normalize_to_per_kg, random_polite_sleep, retry, setup_logging
 
 BASE_URLS = [
@@ -127,12 +128,19 @@ def run_bigbasket_scraper() -> int:
     all_rows: List[Dict[str, Any]] = []
     max_pages = int(os.getenv("BIGBASKET_MAX_PAGES", "3"))
     use_selenium = os.getenv("BIGBASKET_USE_SELENIUM", "false").lower() in ("1", "true", "yes")
+    allow_offline = os.getenv("BIGBASKET_ALLOW_OFFLINE", "true").lower() in ("1", "true", "yes")
 
     try:
         for base_url in BASE_URLS:
             for page in range(1, max_pages + 1):
                 page_url = f"{base_url}?page={page}"
-                html = fetch_url_requests(page_url)
+                try:
+                    html = fetch_url_requests(page_url)
+                except requests.exceptions.RequestException as exc:
+                    if allow_offline:
+                        logging.warning("BigBasket fetch failed (%s). Falling back to mock data.", exc)
+                        return load_mock_rows()
+                    raise
                 rows = parse_cards(html, page_url)
                 if not rows and use_selenium:
                     logging.info("No rows from requests for %s, trying selenium", page_url)
@@ -144,7 +152,7 @@ def run_bigbasket_scraper() -> int:
 
         if not all_rows:
             logging.warning("No BigBasket rows scraped")
-            return 0
+            return load_mock_rows() if allow_offline else 0
 
         df = pd.DataFrame(all_rows)
         df["scraped_date"] = pd.to_datetime(df["scraped_date"]).dt.date

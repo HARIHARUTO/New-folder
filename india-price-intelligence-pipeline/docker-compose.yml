@@ -3,6 +3,11 @@
 x-airflow-common:
   &airflow-common
   image: apache/airflow:2.8.0
+  env_file:
+    - ./.env
+  dns:
+    - 1.1.1.1
+    - 8.8.8.8
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -10,6 +15,7 @@ x-airflow-common:
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__FERNET_KEY: ""
     AIRFLOW__WEBSERVER__SECRET_KEY: "airflow-local-secret"
+    GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/credentials.json
     _PIP_ADDITIONAL_REQUIREMENTS: "dbt-bigquery==1.7.0 google-cloud-bigquery==3.13.0 requests==2.31.0 beautifulsoup4==4.12.2 pandas==1.5.3 python-dotenv==1.0.0"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
@@ -18,6 +24,7 @@ x-airflow-common:
     - ./ingestion:/opt/airflow/ingestion
     - ./dbt_project:/opt/airflow/dbt_project
     - ./.env:/opt/airflow/.env
+    - ./credentials.json:/opt/airflow/credentials.json:ro
   depends_on:
     - postgres
 

@@ -62,11 +62,12 @@ These tables power a dashboard showing trends, margins, and comparisons.
 2. Install dependencies from requirements.txt.
 3. Configure .env with API keys and BigQuery project details.
 4. Set GOOGLE_APPLICATION_CREDENTIALS to the service account JSON.
-5. Run Mandi ingestion.
-6. Run BigBasket scraper.
-7. Run dbt seed, run, and test.
-8. Start Airflow with Docker Compose.
-9. Open Looker Studio and connect to BigQuery marts.
+5. (Optional) Set PIPELINE_* variables for schedule and alerting.
+6. Run Mandi ingestion.
+7. Run BigBasket scraper.
+8. Run dbt seed, run, and test.
+9. Start Airflow with Docker Compose.
+10. Open Looker Studio and connect to BigQuery marts.
 
 ---
 
@@ -216,6 +217,7 @@ This project builds an end-to-end price intelligence pipeline for India. It pull
 ## Alerting
 - Airflow task failures should trigger alerts (email/Slack).
 - dbt test failures should surface in monitoring.
+- Email alerts require SMTP settings (AIRFLOW__SMTP__* in .env).
 
 ## Backfills
 - Mandi ingestion supports paging and offsets for historical backfills.

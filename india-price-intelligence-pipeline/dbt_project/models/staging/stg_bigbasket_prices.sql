@@ -7,7 +7,7 @@ with raw as (
         scraped_at,
         scraped_date,
         date_trunc(scraped_date, week(monday)) as scraped_week
-    from `{{ env_var("GCP_PROJECT_ID") }}.{{ env_var("BQ_DATASET_RAW") }}.bigbasket_prices`
+    from {{ source('raw_ecommerce', 'bigbasket_prices') }}
     where price_per_kg is not null and price_per_kg > 0
 ),
 ranked as (
