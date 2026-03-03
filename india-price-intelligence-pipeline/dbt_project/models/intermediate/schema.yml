@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: int_commodity_reconciled
+    columns:
+      - name: source
+        tests:
+          - accepted_values:
+              values: ['bigbasket', 'mandi']
+
+  - name: int_retail_vs_wholesale
+    columns:
+      - name: canonical_commodity_name
+        tests: [not_null]
+      - name: week
+        tests: [not_null]

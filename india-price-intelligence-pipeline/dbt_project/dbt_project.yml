@@ -1,0 +1,23 @@
+name: 'india_price_intelligence'
+version: '1.0.0'
+config-version: 2
+
+profile: 'india_price_intelligence'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  india_price_intelligence:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  india_price_intelligence:
+    +schema: seed_data
