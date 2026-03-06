@@ -1,193 +1,161 @@
-# India AQI Weather Pipeline: Ground-Truth Project Story
+# Technical Documentation: India AQI Weather Pipeline
 
-## What this project is
+## 1) Objective
 
-This is an end-to-end data engineering project built to answer one practical question:
+Build a reliable, API-first data pipeline to answer:
+- How AQI behaves across major Indian cities over time.
+- Whether rainfall, humidity, and wind are correlated with AQI changes.
 
-- How does weather impact AQI in Indian cities?
+The pipeline is designed for production-style data engineering demonstration: ingestion validation, quarantine handling, orchestrated runs, and warehouse-level quality checks.
 
-The pipeline collects AQI data from data.gov.in, weather data from OpenWeatherMap, loads both into BigQuery, transforms with dbt, and orchestrates everything in Airflow.
+## 2) Data Sources
 
-As of March 6, 2026, the DAG runs are passing end-to-end.
+- AQI API (data.gov.in / CPCB resource)
+  - Pollutant-level readings by city/station/timestamp.
+- Weather API (OpenWeatherMap)
+  - City-level weather observations (temperature, humidity, wind, rain).
 
-## Why I built it this way
+## 3) End-to-End Flow
 
-I wanted this project to be:
+1. Airflow triggers ingestion tasks in parallel.
+2. Ingestion code validates source payloads.
+3. Valid rows are loaded to `raw_aqi` BigQuery tables.
+4. Invalid rows are written to `raw_aqi.invalid_records`.
+5. dbt executes:
+   - staging models
+   - intermediate join models
+   - marts + feature model
+6. dbt tests validate model quality.
+7. Run summary task marks completion.
 
-- reliable enough to run repeatedly
-- easy to debug when something breaks
-- clean enough for a recruiter or senior data engineer to review quickly
-
-So instead of just writing one script, I designed it as a small data platform:
-
-- ingestion layer
-- validation + quarantine layer
-- warehouse layer
-- transformation layer
-- orchestration layer
-
-## The journey (real sequence)
-
-### Phase 1: Make ingestion work
-
-I first focused on getting both sources into the same warehouse:
-
-- AQI API -> `raw_aqi.aqi_readings`
-- Weather API -> `raw_aqi.weather_readings`
-
-At this stage the priority was getting data moving, not perfect modeling.
-
-### Phase 2: Make data trustworthy
-
-Once ingestion worked, I added schema checks before loading:
-
-- valid records go to main raw tables
-- invalid records go to `raw_aqi.invalid_records`
-
-This prevented bad records from silently polluting downstream models.
-
-### Phase 3: Build dbt layers
-
-I split transformations into:
-
-- `stg_*`: clean and standardize
-- `int_*`: business logic and joining
-- `mart_*`: analytics outputs
-- `features_*`: ML-friendly feature table
-
-This made debugging much easier than one large SQL model.
-
-### Phase 4: Orchestrate in Airflow
-
-I created DAG `india_aqi_weather_pipeline`:
-
-1. `ingest_aqi_data` and `ingest_weather_data` in parallel
-2. `dbt_seed`
-3. `dbt_run_staging`
-4. `dbt_run_intermediate`
-5. `dbt_run_marts`
-6. `dbt_test`
-7. `log_run_summary`
-
-Now one trigger runs the full pipeline in order.
-
-### Phase 5: Stabilize and productionize
-
-I fixed operational issues and made the project more realistic:
-
-- custom Airflow image for dependency compatibility
-- timezone normalization for AQI timestamps (IST -> UTC)
-- realistic dbt test tolerance for future timestamps
-- free-tier compatible dbt materialization choice for quality mart
-- partition/cluster settings on marts for better query efficiency
-
-## Main problems I faced and how I fixed them
-
-### 1) Airflow containers crashing on package install
-
-- Problem: runtime pip install inside Airflow was fragile.
-- Fix: built a custom Airflow image with pinned dependencies.
-
-### 2) Local ingestion import errors
-
-- Problem: `python ingestion/...` failed with `ModuleNotFoundError`.
-- Fix: added package path bootstrap in ingestion entry scripts.
-
-### 3) dbt marts failing due to environment constraints
-
-- Problem: `mart_data_quality_metrics` failed under current billing/runtime restrictions.
-- Fix: changed this model to `table` materialization for compatibility.
-
-### 4) Future timestamp test failures
-
-- Problem: AQI source timestamps were interpreted without explicit local timezone handling.
-- Fix: parse as `Asia/Kolkata`, convert to UTC, then test with practical tolerance.
-
-### 5) Airflow CLI run-id errors during manual checks
-
-- Problem: using placeholder run IDs caused parsing errors.
-- Fix: always copy real run ID from `airflow dags list-runs`.
-
-## Current architecture in plain words
-
-- Source APIs provide AQI and weather.
-- Python ingestion validates and loads data to BigQuery raw.
-- dbt builds cleaned and analytical layers.
-- Airflow schedules and controls task dependencies.
-- Tests and quality marts monitor data health.
-
-## Warehouse details
+## 4) Warehouse Layers
 
 - Raw dataset: `raw_aqi`
   - `aqi_readings`
   - `weather_readings`
   - `invalid_records`
-
 - dbt dataset: `dbt_aqi`
-  - staging models
-  - intermediate models
-  - mart models
-  - feature model
+  - `stg_*` cleaned and standardized views
+  - `int_*` business-logic views
+  - `mart_*` analytics tables
+  - `features_city_air_quality` feature table
 
-## Optimizations implemented
+### Warehouse optimization
 
-- Partitioned marts:
-  - `mart_city_aqi_trends` by `reading_date`
-  - `mart_pollutant_breakdown` by `reading_date`
-  - `mart_rain_impact` by `rain_event_date`
-  - `mart_pipeline_health` by `run_timestamp`
-  - `mart_data_quality_metrics` by `run_timestamp`
-  - `features_city_air_quality` by `reading_hour`
+- Date/time marts are partitioned on event or run timestamps.
+- City-focused marts are clustered by `canonical_city`.
+- This reduces BigQuery scan cost for city and date-range filters.
 
-- Clustered city-heavy marts by `canonical_city`.
+## 5) Validation and Quarantine Strategy
 
-## What someone should learn from this project
+- Validation runs before BigQuery load.
+- If required fields are missing or malformed:
+  - record is not loaded to main raw table
+  - error metadata + payload goes to `invalid_records`
+- This prevents bad upstream records from breaking dbt downstream.
 
-1. Make ingestion robust before making dashboards pretty.
-2. Add validation early; quarantine bad records instead of ignoring them.
-3. Keep SQL transformations layered and reviewable.
-4. Treat orchestration as part of the product, not an afterthought.
-5. Debugging real runs is where most engineering learning happens.
+## 6) Airflow Orchestration
 
-## What is still left (next iteration)
+DAG: `india_aqi_weather_pipeline`
 
-- Add automated alerting (email/Slack/PagerDuty style).
-- Add CI checks for dbt/tests on PR.
-- Move secrets from local mounts to secret manager in a cloud setup.
+Task sequence:
+- `ingest_aqi_data` + `ingest_weather_data` (parallel)
+- `dbt_seed`
+- `dbt_run_staging`
+- `dbt_run_intermediate`
+- `dbt_run_marts`
+- `dbt_test`
+- `log_run_summary`
 
-## Quick runbook
+Operational settings:
+- Retries and exponential backoff enabled.
+- SLA configured in DAG default args.
+- Schedule controlled via `PIPELINE_SCHEDULE_CRON` in `.env`.
 
-### Start services
+## 7) dbt Testing Strategy
+
+Implemented checks include:
+- non-null critical keys/timestamps/city columns
+- AQI category validity
+- no impossible future timestamps (with tolerance window)
+- quality metrics freshness check
+
+## 8) Backfill
+
+- `scripts/backfill_aqi.py`
+  - date-range backfill with progress file support (`scripts/completed_dates.txt`)
+- `scripts/backfill_weather.py`
+  - historical weather backfill using Open-Meteo archive endpoint
+
+## 9) Known Constraints
+
+- BigQuery free tier restricts DML-heavy patterns.
+  - `mart_data_quality_metrics` is materialized as a table (not incremental DML) for compatibility.
+- Local Python and Airflow container Python versions differ.
+  - dependencies are pinned in `requirements.txt` and `airflow/Dockerfile` accordingly.
+
+## 10) Runbook
+
+Start services:
+
 ```bash
 docker compose up -d
 ```
 
-### Trigger pipeline
+Trigger DAG:
+
 ```bash
 docker compose exec airflow-webserver airflow dags trigger india_aqi_weather_pipeline
 ```
 
-### View runs
+Check run status:
+
 ```bash
 docker compose exec airflow-webserver airflow dags list-runs -d india_aqi_weather_pipeline --no-backfill
 ```
 
-### View task states for a run
+Check task-level states (use actual run id):
+
 ```bash
-docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline <actual_run_id>
+docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline manual__2026-03-06T05:31:48+00:00
 ```
 
-### Local full check
-```bash
-python ingestion/aqi_ingestion.py
-python ingestion/weather_ingestion.py
-cd dbt_project
-dbt seed --profiles-dir .
-dbt run --profiles-dir .
-dbt test --profiles-dir .
+PowerShell helper to inspect the latest running DAG run:
+
+```powershell
+$rid=(docker compose exec airflow-webserver airflow dags list-runs -d india_aqi_weather_pipeline --no-backfill | Select-String "running" | Select-Object -First 1).ToString().Split("|")[1].Trim(); Write-Host "RunId=$rid"; docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline $rid
 ```
 
-## Final note
+## 11) Operational Timeline (2026-03-06)
 
-This document is intentionally written as a transparent engineering journey.
-It includes what worked, what broke, and what was changed to make the pipeline stable.
+- Airflow stack came up successfully after folder/path cleanup.
+- Early manual runs stayed queued because several triggers were submitted while `max_active_runs=1`.
+- One `ingest_aqi_data` attempt moved to `up_for_retry` due to `SIGTERM` (task interrupted by service restart), not data/code failure.
+- Subsequent runs completed end-to-end with all tasks successful:
+  - `ingest_aqi_data`
+  - `ingest_weather_data`
+  - `dbt_seed`
+  - `dbt_run_staging`
+  - `dbt_run_intermediate`
+  - `dbt_run_marts`
+  - `dbt_test`
+  - `log_run_summary`
+
+## 12) Troubleshooting Notes
+
+- If all tasks show `None`, first check run status (`queued` vs `running` vs `success`).
+- If many runs are queued, do not trigger repeatedly; wait for current run completion.
+- If a task shows `SIGTERM`, inspect whether scheduler/webserver/container was restarted during task execution.
+- Use:
+  - `docker compose exec airflow-webserver airflow dags list-import-errors`
+  - `docker compose logs --tail=200 airflow-scheduler`
+  - task log path under `/opt/airflow/logs/dag_id=.../run_id=.../task_id=.../attempt=...log`
+
+## 13) Interview Positioning
+
+This project demonstrates:
+- source contract validation
+- warehouse modeling discipline (staging/intermediate/marts)
+- orchestration and operational debugging
+- measurable data quality controls
+- feature-ready outputs for downstream ML

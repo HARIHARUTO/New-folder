@@ -87,6 +87,12 @@ To inspect a specific run, use the actual run id from `list-runs`:
 docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline manual__2026-03-06T05:31:48+00:00
 ```
 
+PowerShell helper to fetch latest running run and task states:
+
+```powershell
+$rid=(docker compose exec airflow-webserver airflow dags list-runs -d india_aqi_weather_pipeline --no-backfill | Select-String "running" | Select-Object -First 1).ToString().Split("|")[1].Trim(); Write-Host "RunId=$rid"; docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline $rid
+```
+
 Airflow UI: `http://localhost:8080` (`airflow` / `airflow`)
 
 ## DAG Tasks
@@ -138,3 +144,10 @@ python scripts/backfill_weather.py --start 2024-01-01 --end 2024-03-01
 - End-to-end Airflow DAG runs are passing.
 - Local ingestion + dbt run/test are passing.
 - Project has been migrated from scraper-based approach to API-only ingestion.
+
+## Recent Ops Notes (2026-03-06)
+
+- Multiple manual triggers created queued runs due to `max_active_runs=1`.
+- `ingest_aqi_data` showed `SIGTERM` once because scheduler/webserver restart interrupted the task; subsequent retries/runs succeeded.
+- Seeing all task states as `None` usually means the run is still queued and not yet picked by scheduler.
+- Current live behavior is healthy: ingestion -> dbt seed/run/test -> log summary completes successfully.
