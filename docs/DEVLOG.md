@@ -4,16 +4,22 @@
 
 - Finalized API-first direction for AQI + weather.
 - Implemented ingestion loaders and BigQuery raw landing.
+- What surprised me:
+  AQI API data is pollutant-wise (one row per pollutant), not station-hour wide rows, so staging required a pivot strategy from day one.
 
 ## Week 2: Modeling and Quality
 
 - Built dbt staging/intermediate/marts.
 - Added tests and quarantine-aware data quality flow.
+- What surprised me:
+  early quality checks surfaced recurring malformed values (`pollutant_avg` empty strings) that would have silently contaminated marts without quarantine.
 
 ## Week 3: Orchestration
 
 - Added Airflow DAG for parallel ingestion and sequential dbt.
 - Tuned retries and scheduler settings for local stability.
+- What surprised me:
+  Docker isolation was stricter than expected; credentials and dependencies had to be explicitly mounted/configured for containers.
 
 ## 2026-03-06: Reliability Debug Session
 

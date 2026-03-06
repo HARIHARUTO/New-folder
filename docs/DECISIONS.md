@@ -23,3 +23,9 @@
 - Decision: reject malformed records from primary raw tables.
 - Why: protect downstream models from schema drift and bad values.
 - Tradeoff: more ingestion code and error handling paths.
+
+## DECISION-005: Abandoned scraping mid-build
+
+- Decision: switched from BigBasket scraping to government APIs after repeated anti-bot failures.
+- Why: reliability over control; a pipeline that breaks every few days is not production-usable.
+- Tradeoff: lost a scraping talking point, gained a stronger reliability and architecture decision story.
