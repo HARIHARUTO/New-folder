@@ -1,4 +1,4 @@
-india_price_intelligence:
+india_aqi_weather:
   target: dev
   outputs:
     dev:

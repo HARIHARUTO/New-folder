@@ -1,47 +1,11 @@
-{{ config(partition_by={"field": "run_date", "data_type": "date"}) }}
+{{ config(
+    materialized='table',
+    partition_by={"field": "run_timestamp", "data_type": "timestamp"}
+) }}
 
-with latest as (
-    select
-        current_date() as run_date,
-        (select count(*) from {{ source('raw_ecommerce', 'bigbasket_prices') }}
-          where scraped_date >= date_trunc(current_date(), week(monday))) as bigbasket_rows_loaded,
-        (select count(*) from {{ source('raw_ecommerce', 'mandi_prices') }}
-          where arrival_date >= date_trunc(current_date(), week(monday))) as mandi_rows_loaded,
-        (select max(scraped_at) from {{ source('raw_ecommerce', 'bigbasket_prices') }}) as last_successful_run
-),
-commodities as (
-    select distinct canonical_commodity_name
-    from {{ ref('int_commodity_reconciled') }}
-),
-retail_missing as (
-    select count(*) as commodities_missing_retail
-    from commodities c
-    left join (
-        select distinct canonical_commodity_name
-        from {{ ref('int_commodity_reconciled') }}
-        where source = 'bigbasket'
-          and week >= date_trunc(current_date(), week(monday))
-    ) r using (canonical_commodity_name)
-    where r.canonical_commodity_name is null
-),
-wholesale_missing as (
-    select count(*) as commodities_missing_wholesale
-    from commodities c
-    left join (
-        select distinct canonical_commodity_name
-        from {{ ref('int_commodity_reconciled') }}
-        where source = 'mandi'
-          and week >= date_trunc(current_date(), week(monday))
-    ) w using (canonical_commodity_name)
-    where w.canonical_commodity_name is null
-)
 select
-    l.run_date,
-    l.bigbasket_rows_loaded,
-    l.mandi_rows_loaded,
-    r.commodities_missing_retail,
-    w.commodities_missing_wholesale,
-    l.last_successful_run
-from latest l
-cross join retail_missing r
-cross join wholesale_missing w
+    current_timestamp() as run_timestamp,
+    (select count(*) from {{ ref('stg_aqi_readings') }} where reading_hour >= timestamp_sub(current_timestamp(), interval 24 hour)) as aqi_rows_last_24h,
+    (select count(*) from {{ ref('stg_weather_readings') }} where weather_hour >= timestamp_sub(current_timestamp(), interval 24 hour)) as weather_rows_last_24h,
+    (select max(latest_fetched_at) from {{ ref('stg_aqi_readings') }}) as last_aqi_fetch,
+    (select max(fetched_at) from {{ ref('stg_weather_readings') }}) as last_weather_fetch

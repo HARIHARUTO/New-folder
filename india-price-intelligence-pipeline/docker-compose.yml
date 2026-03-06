@@ -1,8 +1,9 @@
-﻿version: "3.8"
-
 x-airflow-common:
   &airflow-common
-  image: apache/airflow:2.8.0
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  image: india-aqi-airflow:2.8.0-custom
   env_file:
     - ./.env
   dns:
@@ -16,17 +17,18 @@ x-airflow-common:
     AIRFLOW__CORE__FERNET_KEY: ""
     AIRFLOW__WEBSERVER__SECRET_KEY: "airflow-local-secret"
     GOOGLE_APPLICATION_CREDENTIALS: /opt/airflow/credentials.json
-    _PIP_ADDITIONAL_REQUIREMENTS: "dbt-bigquery==1.7.0 google-cloud-bigquery==3.13.0 requests==2.31.0 beautifulsoup4==4.12.2 pandas==1.5.3 python-dotenv==1.0.0"
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/plugins:/opt/airflow/plugins
     - ./ingestion:/opt/airflow/ingestion
     - ./dbt_project:/opt/airflow/dbt_project
+    - ./data:/opt/airflow/data
     - ./.env:/opt/airflow/.env
     - ./credentials.json:/opt/airflow/credentials.json:ro
   depends_on:
-    - postgres
+    postgres:
+      condition: service_healthy
 
 services:
   postgres:
@@ -37,6 +39,11 @@ services:
       POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   airflow-init:
     <<: *airflow-common
@@ -48,10 +55,20 @@ services:
     command: webserver
     ports:
       - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-db-volume:

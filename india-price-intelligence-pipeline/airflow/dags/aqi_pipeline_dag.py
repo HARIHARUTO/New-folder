@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 from datetime import datetime, timedelta
 
@@ -11,12 +11,12 @@ PROJECT_ROOT = os.path.abspath(os.path.join(DAG_DIR, ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from ingestion.scraper import run_bigbasket_scraper  # noqa: E402
-from ingestion.mandi_api import run_mandi_fetcher  # noqa: E402
+from ingestion.aqi_ingestion import run_aqi_ingestion  # noqa: E402
+from ingestion.weather_ingestion import run_weather_ingestion  # noqa: E402
 
 
-def log_pipeline_completion() -> None:
-    print("Pipeline completed successfully")
+def log_run_summary() -> None:
+    print("AQI + Weather pipeline run completed")
 
 
 default_args = {
@@ -25,30 +25,27 @@ default_args = {
     "retry_delay": timedelta(minutes=int(os.getenv("PIPELINE_RETRY_DELAY_MIN", "10"))),
     "email_on_failure": bool(os.getenv("PIPELINE_ALERT_EMAIL")),
     "email": [os.getenv("PIPELINE_ALERT_EMAIL")] if os.getenv("PIPELINE_ALERT_EMAIL") else [],
+    "retry_exponential_backoff": True,
+    "sla": timedelta(hours=2),
 }
 
 with DAG(
-    dag_id="india_price_intelligence_pipeline",
+    dag_id="india_aqi_weather_pipeline",
     start_date=datetime(2024, 1, 1),
-    schedule=os.getenv("PIPELINE_SCHEDULE_CRON", "0 6 * * *"),
+    schedule=os.getenv("PIPELINE_SCHEDULE_CRON", "0 * * * *"),
     catchup=False,
     max_active_runs=1,
     default_args=default_args,
-    tags=["data-engineering", "india-prices", "weekly"],
+    tags=["data-engineering", "aqi", "weather", "hourly"],
 ) as dag:
-    scrape_bigbasket = PythonOperator(
-        task_id="scrape_bigbasket",
-        python_callable=run_bigbasket_scraper,
+    ingest_aqi_data = PythonOperator(
+        task_id="ingest_aqi_data",
+        python_callable=run_aqi_ingestion,
     )
 
-    fetch_mandi_api = PythonOperator(
-        task_id="fetch_mandi_api",
-        python_callable=run_mandi_fetcher,
-    )
-
-    dbt_source_freshness = BashOperator(
-        task_id="dbt_source_freshness",
-        bash_command="cd /opt/airflow/dbt_project && dbt source freshness --profiles-dir .",
+    ingest_weather_data = PythonOperator(
+        task_id="ingest_weather_data",
+        python_callable=run_weather_ingestion,
     )
 
     dbt_seed = BashOperator(
@@ -76,10 +73,10 @@ with DAG(
         bash_command="cd /opt/airflow/dbt_project && dbt test --profiles-dir .",
     )
 
-    log_success = PythonOperator(
-        task_id="log_success",
-        python_callable=log_pipeline_completion,
+    log_run_summary_task = PythonOperator(
+        task_id="log_run_summary",
+        python_callable=log_run_summary,
     )
 
-    [scrape_bigbasket, fetch_mandi_api] >> dbt_source_freshness >> dbt_seed
-    dbt_seed >> dbt_run_staging >> dbt_run_intermediate >> dbt_run_marts >> dbt_test >> log_success
+    [ingest_aqi_data, ingest_weather_data] >> dbt_seed
+    dbt_seed >> dbt_run_staging >> dbt_run_intermediate >> dbt_run_marts >> dbt_test >> log_run_summary_task

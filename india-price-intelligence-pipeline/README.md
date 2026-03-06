@@ -1,153 +1,140 @@
-﻿# India Retail Price Intelligence Pipeline
+# India AQI Weather Pipeline
 
-Tracks farm-to-fork price gap by combining BigBasket retail scraping with Government of India mandi wholesale prices.
+API-driven data engineering project that correlates Indian city AQI with weather conditions using BigQuery, dbt, and Airflow.
 
-## What This Project Does
+## What It Does
 
-A weekly automated data pipeline that:
-1. Scrapes retail product prices from BigBasket.
-2. Pulls mandi wholesale prices from data.gov.in.
-3. Loads both sources to BigQuery raw tables.
-4. Transforms and reconciles commodity names via dbt.
-5. Produces marts for trend, margin, state comparison, and pipeline health.
-6. Orchestrates everything with Airflow on a weekly schedule.
-7. Powers a Looker Studio dashboard.
+1. Ingests AQI data from data.gov.in (CPCB resource API).
+2. Ingests weather data from OpenWeatherMap.
+3. Validates records and quarantines schema/type failures.
+4. Loads raw data to BigQuery (`raw_aqi`).
+5. Builds staging, intermediate, mart, and feature tables with dbt (`dbt_aqi`).
+6. Runs quality tests and pipeline-health metrics.
+7. Orchestrates the full flow in Airflow.
 
-## Architecture Flow
+## Architecture
 
-BigBasket Scraper + data.gov.in API -> BigQuery raw dataset -> dbt staging/intermediate/marts -> Looker Studio
-Orchestration: Airflow DAG (weekly, Sunday 06:00)
-
-## Current Progress (as of 2026-03-03)
-
-Completed:
-- Ingestion scripts for Mandi API and retail scraper.
-- BigQuery raw tables and dbt models (staging, intermediate, marts).
-- dbt tests + custom data quality checks.
-- Airflow DAG orchestration with retries and source freshness check.
-- Docker Compose setup for Airflow + Postgres.
-- Looker Studio dashboard connected to marts.
-- Source freshness rules + partitioned marts for performance.
-
-In progress:
-- Real-time retail scraping stability (site availability/anti-bot).
-- Email alerting (SMTP config via Airflow).
-- Consistent manual trigger + log visibility on Airflow UI.
+AQI API + Weather API -> Python ingestion + validation -> BigQuery raw -> dbt models -> Airflow orchestration -> Looker Studio
 
 ## Tech Stack
 
-- Python 3.11
-- requests, BeautifulSoup4, pandas, python-dotenv
+- Python 3.11 (local)
+- requests, pandas, python-dotenv
 - Google BigQuery
-- dbt Core (dbt-bigquery)
+- dbt Core + dbt-bigquery
 - Apache Airflow 2.8 (Docker Compose)
-- Looker Studio
+- Docker
 
-## Folder Structure
+## Project Structure
 
 ```text
-india-price-intelligence-pipeline/
-  ingestion/
-  dbt_project/
-  airflow/
-  .env.example
-  .gitignore
-  requirements.txt
-  docker-compose.yml
-  README.md
+airflow/
+  dags/aqi_pipeline_dag.py
+  Dockerfile
+ingestion/
+  aqi_ingestion.py
+  weather_ingestion.py
+  schema_validator.py
+  bq_loader.py
+  utils.py
+dbt_project/
+  models/
+  seeds/
+  tests/
+scripts/
+  backfill_aqi.py
+  backfill_weather.py
+data/
+  cities.json
+docker-compose.yml
 ```
 
 ## Setup
 
-1. Create GCP project and enable BigQuery API.
-2. Create service account with BigQuery permissions and download `credentials.json` in repo root.
-3. Register on data.gov.in and get API key.
-4. Copy `.env.example` to `.env` and fill values.
-5. Install dependencies:
+1. Copy `.env.example` to `.env`.
+2. Fill required env vars:
+   - `GCP_PROJECT_ID`
+   - `DATA_GOV_API_KEY`
+   - `OPENWEATHER_API_KEY`
+   - `GOOGLE_APPLICATION_CREDENTIALS` (container path is mounted automatically)
+3. Place `credentials.json` in repo root.
+4. Ensure BigQuery datasets exist:
+   - `raw_aqi`
+   - `dbt_aqi`
+
+## Run Locally (without Airflow)
 
 ```bash
-pip install -r requirements.txt
-```
-
-6. Create BigQuery datasets:
-- `raw_ecommerce`
-- `dbt_ecommerce`
-
-## BigQuery Raw Tables
-
-`raw_ecommerce.bigbasket_prices`
-- product_name STRING
-- category STRING
-- subcategory STRING
-- price_raw STRING
-- price_per_kg FLOAT64
-- unit_raw STRING
-- discount_percent FLOAT64
-- scraped_at TIMESTAMP
-- scraped_date DATE
-
-`raw_ecommerce.mandi_prices`
-- state STRING
-- district STRING
-- market STRING
-- commodity STRING
-- variety STRING
-- arrival_date DATE
-- min_price_per_kg FLOAT64
-- max_price_per_kg FLOAT64
-- modal_price_per_kg FLOAT64
-- fetched_at TIMESTAMP
-
-## Run Ingestion Locally
-
-```bash
-python ingestion/scraper.py
-python ingestion/mandi_api.py
-```
-
-## Run dbt
-
-```bash
+python ingestion/aqi_ingestion.py
+python ingestion/weather_ingestion.py
 cd dbt_project
 dbt seed --profiles-dir .
 dbt run --profiles-dir .
 dbt test --profiles-dir .
 ```
 
-## Run Airflow
+## Run with Airflow
 
 ```bash
-docker compose up airflow-init
 docker compose up -d
+docker compose exec airflow-webserver airflow dags trigger india_aqi_weather_pipeline
+docker compose exec airflow-webserver airflow dags list-runs -d india_aqi_weather_pipeline --no-backfill
 ```
 
-Airflow UI: `http://localhost:8080` (airflow / airflow)
+To inspect a specific run, use the actual run id from `list-runs`:
+
+```bash
+docker compose exec airflow-webserver airflow tasks states-for-dag-run india_aqi_weather_pipeline manual__2026-03-06T05:31:48+00:00
+```
+
+Airflow UI: `http://localhost:8080` (`airflow` / `airflow`)
 
 ## DAG Tasks
 
-- `scrape_bigbasket` and `fetch_mandi_api` run in parallel
+- `ingest_aqi_data`
+- `ingest_weather_data`
 - `dbt_seed`
 - `dbt_run_staging`
 - `dbt_run_intermediate`
 - `dbt_run_marts`
 - `dbt_test`
-- `log_success`
+- `log_run_summary`
 
-## Data Challenges Solved
+## Data Quality Controls
 
-- Price strings with currency symbols and commas.
-- Mixed units (g, kg, piece) normalized to per-kg.
-- API pagination and offset-based iteration.
-- Commodity name mismatch handled using dbt seed mapping.
-- Filtering invalid/zero price rows.
+- Pre-load schema validation for ingestion.
+- Quarantine table: `raw_aqi.invalid_records`.
+- dbt tests for nulls, category validity, future timestamps, and freshness.
+- Mart-level quality metrics via `mart_data_quality_metrics`.
 
-## Looker Studio Pages
+## Warehouse Optimizations
 
-1. Price Tracker
-2. Margin Analysis
-3. State Wholesale Prices
-4. Pipeline Health
+- Marts are materialized as BigQuery tables for predictable query performance.
+- Time-series marts are partitioned:
+  - `mart_city_aqi_trends` by `reading_date`
+  - `mart_pollutant_breakdown` by `reading_date`
+  - `mart_rain_impact` by `rain_event_date`
+  - `mart_pipeline_health` by `run_timestamp`
+  - `mart_data_quality_metrics` by `run_timestamp`
+  - `features_city_air_quality` by `reading_hour`
+- City-heavy marts are clustered by `canonical_city` for better pruning.
 
-## Interview Summary
+## Backfill
 
-I built an end-to-end weekly pipeline to answer which commodities in India have the largest farm-to-fork margin gap by joining retail and wholesale price systems with data quality checks and reproducible orchestration.
+AQI:
+
+```bash
+python scripts/backfill_aqi.py --start 2024-01-01 --end 2024-03-01
+```
+
+Weather:
+
+```bash
+python scripts/backfill_weather.py --start 2024-01-01 --end 2024-03-01
+```
+
+## Current Status
+
+- End-to-end Airflow DAG runs are passing.
+- Local ingestion + dbt run/test are passing.
+- Project has been migrated from scraper-based approach to API-only ingestion.

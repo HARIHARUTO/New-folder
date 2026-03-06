@@ -1,101 +1,92 @@
-﻿import logging
-import random
-import re
+﻿import random
 import time
-from datetime import date, datetime
-from typing import Any, Callable, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
-LOGGER_FORMAT = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-
-
-def setup_logging(level: int = logging.INFO) -> None:
-    logging.basicConfig(level=level, format=LOGGER_FORMAT)
+import requests
 
 
-def clean_price_to_float(value: Any) -> Optional[float]:
-    if value is None:
+class SchemaMismatchError(Exception):
+    def __init__(self, field: str, reason: str) -> None:
+        super().__init__(f"{field}: {reason}")
+        self.field = field
+        self.reason = reason
+
+
+def parse_datetime_str(value: str, fmt: str = "%d/%m/%Y %H:%M:%S") -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
         return None
-    text = str(value).strip()
-    if not text:
-        return None
-    text = text.replace(",", "")
-    match = re.search(r"([0-9]+(?:\.[0-9]+)?)", text)
-    if not match:
-        return None
-    try:
-        return float(match.group(1))
-    except ValueError:
-        return None
-
-
-def normalize_to_per_kg(price: Optional[float], unit_raw: str) -> Optional[float]:
-    if price is None:
-        return None
-    unit = (unit_raw or "").strip().lower()
-    if not unit:
-        return None
-
-    kg_match = re.search(r"([0-9]*\.?[0-9]+)\s*kg", unit)
-    if kg_match:
-        qty_kg = float(kg_match.group(1))
-        return price / qty_kg if qty_kg > 0 else None
-
-    g_match = re.search(r"([0-9]*\.?[0-9]+)\s*g", unit)
-    if g_match:
-        qty_kg = float(g_match.group(1)) / 1000.0
-        return price / qty_kg if qty_kg > 0 else None
-
-    ml_match = re.search(r"([0-9]*\.?[0-9]+)\s*ml", unit)
-    if ml_match:
-        # Approximate density for water-like products where 1000 ml ~= 1 kg.
-        qty_kg = float(ml_match.group(1)) / 1000.0
-        return price / qty_kg if qty_kg > 0 else None
-
-    l_match = re.search(r"([0-9]*\.?[0-9]+)\s*l", unit)
-    if l_match:
-        qty_kg = float(l_match.group(1))
-        return price / qty_kg if qty_kg > 0 else None
-
-    if "piece" in unit or "pc" in unit:
-        assumed_piece_weight_kg = 0.2
-        return price / assumed_piece_weight_kg
-
+    formats = [fmt, "%d-%m-%Y %H:%M:%S", "%Y-%m-%d %H:%M:%S"]
+    ist = timezone(timedelta(hours=5, minutes=30))
+    for item in formats:
+        try:
+            parsed = datetime.strptime(raw, item)
+            # data.gov AQI timestamps are local India time; convert to UTC
+            return parsed.replace(tzinfo=ist).astimezone(timezone.utc)
+        except Exception:
+            continue
     return None
 
 
-def parse_ddmmyyyy(value: str) -> Optional[date]:
-    if not value:
-        return None
+def safe_float(value: Any) -> Optional[float]:
     try:
-        return datetime.strptime(value.strip(), "%d/%m/%Y").date()
-    except ValueError:
+        return float(str(value).strip())
+    except Exception:
         return None
 
 
-def retry(
-    fn: Callable[[], Any],
+def retry_request(
+    url: str,
+    params: Dict[str, Any],
     retries: int = 3,
-    base_delay: float = 1.5,
-    jitter: float = 0.7,
-    retry_on: Tuple[int, ...] = (403, 429, 500, 502, 503, 504),
-) -> Any:
-    last_error: Optional[Exception] = None
+    backoff_base: float = 2.0,
+    timeout: int = 30,
+) -> requests.Response:
+    last_exc: Optional[Exception] = None
     for attempt in range(1, retries + 1):
         try:
-            return fn()
+            resp = requests.get(url, params=params, timeout=timeout)
+            resp.raise_for_status()
+            return resp
         except Exception as exc:
-            last_error = exc
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status is not None and status not in retry_on:
-                raise
+            last_exc = exc
             if attempt == retries:
                 break
-            delay = (base_delay ** attempt) + random.uniform(0, jitter)
-            time.sleep(delay)
-    if last_error:
-        raise last_error
-    raise RuntimeError("Retry failed without captured exception")
+            time.sleep((backoff_base ** attempt) + random.uniform(0, 1.0))
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("retry_request failed without exception")
 
 
-def random_polite_sleep(min_seconds: float = 1.0, max_seconds: float = 3.0) -> None:
-    time.sleep(random.uniform(min_seconds, max_seconds))
+def paginate_api(
+    base_url: str,
+    api_key: str,
+    limit: int = 100,
+    offset: int = 0,
+    max_pages: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    pages = 0
+    while True:
+        params = {
+            "api-key": api_key,
+            "format": "json",
+            "limit": limit,
+            "offset": offset,
+        }
+        resp = retry_request(base_url, params=params)
+        payload = resp.json()
+        records = payload.get("records", [])
+        if not records:
+            break
+        rows.extend(records)
+        if len(records) < limit:
+            break
+        offset += limit
+        pages += 1
+        if max_pages is not None and pages >= max_pages:
+            break
+        time.sleep(1.0)
+    return rows
+

@@ -1,20 +1,25 @@
 version: 2
 
 models:
-  - name: stg_bigbasket_prices
+  - name: stg_aqi_readings
+    description: Cleaned AQI readings pivoted to one row per station per hour.
     columns:
-      - name: product_name
-        tests: [not_null]
-      - name: price_per_kg
-        tests: [not_null]
-      - name: scraped_date
-        tests: [not_null]
+      - name: station_name
+        tests:
+          - not_null
+      - name: canonical_city
+        tests:
+          - not_null
+      - name: reading_hour
+        tests:
+          - not_null
 
-  - name: stg_mandi_prices
+  - name: stg_weather_readings
+    description: Cleaned weather readings per city per hour.
     columns:
-      - name: commodity
-        tests: [not_null]
-      - name: modal_price_per_kg
-        tests: [not_null]
-      - name: arrival_date
-        tests: [not_null]
+      - name: canonical_city
+        tests:
+          - not_null
+      - name: weather_hour
+        tests:
+          - not_null

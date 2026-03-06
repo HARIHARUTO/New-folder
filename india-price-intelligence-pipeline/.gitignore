@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.pyc
 .venv/
@@ -11,10 +11,16 @@ credentials.json
 # dbt
 dbt_project/target/
 dbt_project/dbt_packages/
+dbt_project/logs/
+logs/
+*.log
 
 # Airflow
 airflow/logs/
 airflow/.env
+
+# Backfill state
+scripts/completed_dates.txt
 
 # OS/editor
 .DS_Store
