@@ -4,6 +4,7 @@
 
 - Date: 2026-03-06
 - Symptom: `ingest_aqi_data` moved to `up_for_retry`.
+- Evidence: task log showed `Received SIGTERM. Terminating subprocesses.` while pagination was in progress.
 - Root cause: scheduler/webserver restart interrupted running task.
 - Fix: avoid restarts during active runs, allow retry flow to continue.
 - Result: subsequent runs completed successfully.

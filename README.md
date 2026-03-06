@@ -23,10 +23,35 @@ Recent successful run IDs:
 
 Artifacts to add:
 
-- Airflow green DAG screenshot: `docs/screenshots/airflow_dag_green.png`
+- Airflow green DAG screenshot: `docs/screenshots/airflow_dag_grid.png`
 - dbt test output screenshot: `docs/screenshots/dbt_test_pass.png`
 - BigQuery row-count screenshot: `docs/screenshots/bigquery_row_counts.png`
 - Looker Studio dashboard URL: `TODO_ADD_LINK`
+
+## Pipeline Runs - Proof of Work
+
+### DAG Grid - All Tasks Successful
+![DAG Grid](docs/screenshots/airflow_dag_grid.png)
+
+### Task-Level State Output
+![Task States](docs/screenshots/airflow_task_states.png)
+
+Latest successful run date: `2026-03-06`  
+Representative run ID: `manual__2026-03-06T06:50:49+00:00`  
+Full pipeline duration: about 5 minutes (`05:14:09` longest observed in UI)
+
+Task flow:
+
+- `ingest_aqi_data`
+- `ingest_weather_data`
+- `dbt_seed`
+- `dbt_run_staging`
+- `dbt_run_intermediate`
+- `dbt_run_marts`
+- `dbt_test`
+- `log_run_summary`
+
+All tasks: `success`
 
 ## Architecture
 
