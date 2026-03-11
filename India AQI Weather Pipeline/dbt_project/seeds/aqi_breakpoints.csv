@@ -1,0 +1,7 @@
+min_aqi,max_aqi,category,health_message
+0,50,Good,Minimal impact
+51,100,Satisfactory,Minor breathing discomfort
+101,200,Moderate,Breathing discomfort for sensitive groups
+201,300,Poor,Breathing discomfort for most people
+301,400,Very Poor,Respiratory illness on prolonged exposure
+401,500,Severe,Health impacts even on light activity

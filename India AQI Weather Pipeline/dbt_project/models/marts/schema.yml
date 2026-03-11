@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: mart_city_aqi_trends
+    description: Daily AQI aggregates per city.
+  - name: mart_weather_aqi_correlation
+    description: Correlation between weather variables and AQI per city.
+  - name: mart_pollutant_breakdown
+    description: Pollutant contribution and dominant pollutant per city/day.
+  - name: mart_rain_impact
+    description: AQI before/during/after rain events.
+  - name: mart_worst_best_cities
+    description: City leaderboard by AQI.
+  - name: mart_data_quality_metrics
+    description: Data quality metrics for pipeline health.
+  - name: mart_pipeline_health
+    description: Basic pipeline health snapshot.
+  - name: features_city_air_quality
+    description: Feature store for ML-ready AQI features.

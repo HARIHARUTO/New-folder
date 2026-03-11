@@ -1,0 +1,23 @@
+name: 'india_aqi_weather'
+version: '2.0.0'
+config-version: 2
+
+profile: 'india_aqi_weather'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+models:
+  india_aqi_weather:
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: view
+    marts:
+      +materialized: table
+
+seeds:
+  india_aqi_weather:
+    +schema: seed_data

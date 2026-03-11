@@ -74,11 +74,11 @@ If you want a static diagram image, export and place it at `docs/architecture.pn
 
 ## What It Does
 
-1. Ingests AQI data from data.gov.in (CPCB resource API).
+1. Ingests AQI readings from 150+ monitoring stations across India (~4,000 records/day) from data.gov.in (CPCB resource API).
 2. Ingests weather data from OpenWeatherMap.
-3. Validates records and quarantines schema/type failures.
+3. Validates records and quarantines schema/type failures (~3-8% of records/day, primarily missing PM2.5 values or invalid station IDs).
 4. Loads raw data to BigQuery (`raw_aqi`).
-5. Builds staging, intermediate, mart, and feature tables with dbt (`dbt_aqi`).
+5. Builds staging, intermediate, mart, and feature tables with dbt (`dbt_aqi`), including daily AQI summaries, city-level rankings, and ML-ready feature vectors with 14 engineered features.
 6. Runs quality tests and pipeline-health metrics.
 7. Orchestrates the full flow in Airflow.
 
@@ -204,6 +204,13 @@ Airflow UI: `http://localhost:8080` (`airflow` / `airflow`)
 - `dbt_run_marts`
 - `dbt_test`
 - `log_run_summary`
+
+## dbt Layering (Why 3 Layers)
+
+Staging is a 1:1 copy of source tables with standardized naming and light cleaning only, and business logic is intentionally excluded.  
+Intermediate is where joins and transformation logic live, including AQI + weather integration and reusable derived fields.  
+Marts are final, query-optimized analytical tables built for reporting and downstream consumers.  
+Feature marts provide ML-ready vectors (14 engineered features) for model training and scoring workflows.
 
 ## Data Quality Controls
 

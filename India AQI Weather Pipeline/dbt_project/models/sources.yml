@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: raw_aqi
+    database: "{{ env_var('GCP_PROJECT_ID') }}"
+    schema: "{{ env_var('BQ_DATASET_RAW') }}"
+    tables:
+      - name: aqi_readings
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 2, period: hour}
+          error_after: {count: 6, period: hour}
+      - name: weather_readings
+        loaded_at_field: fetched_at
+        freshness:
+          warn_after: {count: 2, period: hour}
+          error_after: {count: 6, period: hour}
+      - name: invalid_records
+        loaded_at_field: quarantined_at

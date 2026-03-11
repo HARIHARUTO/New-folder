@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_aqi_readings
+    description: Cleaned AQI readings pivoted to one row per station per hour.
+    columns:
+      - name: station_name
+        tests:
+          - not_null
+      - name: canonical_city
+        tests:
+          - not_null
+      - name: reading_hour
+        tests:
+          - not_null
+
+  - name: stg_weather_readings
+    description: Cleaned weather readings per city per hour.
+    columns:
+      - name: canonical_city
+        tests:
+          - not_null
+      - name: weather_hour
+        tests:
+          - not_null
